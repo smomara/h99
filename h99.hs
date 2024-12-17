@@ -219,3 +219,86 @@ lfsort lists = sortBy (compare `on` frequency) lists
   where
     fm = M.fromListWith (+) [(length xs, 1) | xs <- lists]
     frequency = (fm M.!) . length
+
+-- | Problem 31
+-- Determine whether a given integer number is prime
+isPrime :: Integral a => a -> Bool
+isPrime n = n > 1 && null [d | d <- [2..isqrt n], n `mod` d == 0]
+  where isqrt = floor . sqrt . fromIntegral
+
+-- | Problem 32
+-- Determine the greatest common divisor of two positive integer numbers
+myGCD :: Integral a => a -> a -> a
+myGCD a 0 = abs a
+myGCD a b = myGCD b (a `mod` b)
+
+-- | Problem 33
+-- Determine whether two positive integer numbers are coprime
+coprime :: Integral a => a -> a -> Bool
+coprime x y = myGCD x y == 1
+
+-- | Problem 34
+-- Calculate Euler's totient function phi(m)
+totient :: Integral a => a -> Int
+totient 1 = 1
+totient m = length [r | r <- [1..m-1], r `coprime` m]
+
+-- | Problem 35
+-- Determine the prime factors of a given positive integer
+primeFactors :: Integral a => a -> [a]
+primeFactors n
+    | n < 2     = []
+    | n == 2    = [2]
+    | even n    = 2 : primeFactors (n `div` 2)
+    | otherwise = case factors of
+        [] -> [n]  -- n is prime
+        (f:_) -> f : primeFactors (n `div` f)
+  where
+    isqrt = floor . sqrt . fromIntegral
+    divides d n = n `mod` d == 0
+    factors = [x | x <- [3,5..isqrt n], divides x n, isPrime x]
+
+-- | Problem 36
+-- Determine the prime factors and their multiplicites of a given positive integer
+prime_factors_mult :: Integral a => a -> [(a, Int)]
+prime_factors_mult = map (\(a, b) -> (b, a)) . encode . primeFactors
+
+-- | Problem 37
+-- Calculate Euler's totient function phi(m) (improved)
+--
+-- For a number m with prime factorization ((p1,m1) (p2,m2) (p3,m3) ...),
+-- phi(m) can be efficiently calculated as:
+--
+-- phi(m) = (p1-1) * p1^(m1-1) * 
+--          (p2-1) * p2^(m2-1) * 
+--          (p3-1) * p3^(m3-1) * ...
+totient' :: Integral a => a -> a
+totient' = product . map (\(p,m) -> (p-1) * p^(m-1)) . prime_factors_mult
+
+-- | Problem 38
+-- Compare the two methods of calculating Euler's totient functions
+-- No solution required
+
+-- | Problem 39
+-- A list of prime numbers in a given range
+primesR :: Integral a => a -> a -> [a]
+primesR lo hi = [x | x <- [lo..hi], isPrime x]
+
+-- | Problem 40
+-- Goldbach's conjecture
+goldbach :: Integral a => a -> (a, a)
+goldbach n
+  | n <= 2 || odd n = error "must be even and greater than 2"
+  | otherwise       = head [(x, n-x) | x <- primesR 1 (n-1), isPrime (n-x)]
+
+-- | Problem 41
+-- A list of even numbers and their Goldbach compositions in a given range
+goldbachList :: Integral a => a -> a -> [(a, a)]
+goldbachList lo hi =
+  [ goldbach n
+  | n <- filter even [lo..hi]
+  ]
+
+goldbachList' :: Integral a => a -> a -> a -> [(a, a)]
+goldbachList' lo hi thresh = filter (both (>thresh)) $ goldbachList lo hi
+  where both f (x, y) = (f x) && (f y)
