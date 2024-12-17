@@ -30,8 +30,7 @@ elementAt (x:xs) n = elementAt xs (n-1)
 -- | Problem 4
 -- Find the number of elements in a list
 myLength :: [a] -> Int
-myLength [] = 0
-myLength (_:xs) = 1 + myLength xs
+myLength = foldr (const (+1)) 0
 
 -- | Problem 5
 -- Reverse a list
