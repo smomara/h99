@@ -1,6 +1,6 @@
 import Control.Arrow ((&&&))
 import System.Random (getStdGen, randomRs)
-import Data.List (nub, tails, sortBy)
+import Data.List (nub, tails, sortBy, partition)
 import Data.Function (on)
 import qualified Data.Map as M
 import Data.Map (Map)
@@ -301,3 +301,158 @@ goldbachList lo hi =
 goldbachList' :: Integral a => a -> a -> a -> [(a, a)]
 goldbachList' lo hi thresh = filter (both (>thresh)) $ goldbachList lo hi
   where both f (x, y) = (f x) && (f y)
+
+-- | Problem 46
+-- Truth tables for logical expressions
+and' :: Bool -> Bool -> Bool
+and' = (&&)
+
+or' :: Bool -> Bool -> Bool
+or' = (||)
+
+nor' :: Bool -> Bool -> Bool
+nor' = and' `on` not
+
+xor' :: Bool -> Bool -> Bool
+xor' = (/=)
+
+impl' :: Bool -> Bool -> Bool
+impl' = or' . not
+
+equ' :: Bool -> Bool -> Bool
+equ' = (==)
+
+table :: (Bool -> Bool -> Bool) -> IO ()
+table f =
+  mapM_ putStrLn [ unwords $ map show [x, y, f x y]
+                 | x <- [True, False], y <- [True, False] ]
+
+-- | Problem 47
+-- Same as above
+table2 :: (Bool -> Bool -> Bool) -> IO ()
+table2 = table
+
+-- | Problem 48
+-- Generalize to contain any number of logical variables
+tablen :: Int -> ([Bool] -> Bool) -> IO ()
+tablen n f =
+  mapM_ putStrLn [ unwords $ map show (args ++ [f args])
+                 | args <- sequence (replicate n [True, False]) ]
+
+-- | Problem 49
+-- Gray codes
+gray :: Int -> [String]
+gray 0 = [""]
+gray n = map ('0':) prev ++ map ('1':) (reverse prev)
+  where prev = gray (n-1)
+
+-- | Problem 50
+-- Huffman codes
+data HuffmanTree a
+  = Leaf a Int -- symbol and frequency
+  | Node (HuffmanTree a) Int (HuffmanTree a) -- left branch, number, right branch
+
+freq :: HuffmanTree a -> Int
+freq (Leaf _ f) = f
+freq (Node _ f _) = f
+
+toLeaf :: (a, Int) -> HuffmanTree a
+toLeaf (x, f) = Leaf x f
+
+buildTree :: Ord a => [HuffmanTree a] -> HuffmanTree a
+buildTree [t] = t
+buildTree ts = buildTree $ insertInOrder newNode rest
+  where
+    (t1:t2:rest) = sortBy (compare `on` freq) ts
+    newNode = Node t1 (freq t1 + freq t2) t2
+    
+    insertInOrder :: Ord a => HuffmanTree a -> [HuffmanTree a] -> [HuffmanTree a]
+    insertInOrder t [] = [t]
+    insertInOrder t (x:xs)
+      | freq t <= freq x = t : x : xs
+      | otherwise = x : insertInOrder t xs
+
+generateCodes :: HuffmanTree a -> [(a, String)]
+generateCodes tree = genCodes tree ""
+  where
+    genCodes (Leaf x _) code = [(x, code)]
+    genCodes (Node left _ right) code =
+      genCodes left (code ++ "0") ++ genCodes right (code ++ "1")
+
+huffman :: Ord a => [(a, Int)] -> [(a, String)]
+huffman = sortBy (compare `on` fst) . generateCodes . buildTree . map toLeaf
+
+-- | Binary Trees
+data Tree a = Empty | Branch a (Tree a) (Tree a)
+  deriving (Show, Eq)
+
+-- | Problem 54
+-- Haskell's type system solves this for us - no solution needed
+
+-- | Problem 55
+-- Construct completely balanced binary trees
+cbalTree :: Int -> [Tree Char]
+cbalTree 0 = [Empty]
+cbalTree n =
+  [ Branch 'x' left right
+  | left <- cbalTree n1
+  , right <- cbalTree n2
+  ] ++
+  [ Branch 'x' left right
+  | n1 /= n2
+  , left <- cbalTree n2
+  , right <- cbalTree n1
+  ]
+  where
+    n1 = (n-1) `div` 2
+    n2 = (n-1) - n1
+
+-- | Problem 56
+-- Symmetric binary trees
+symmetric :: Tree a -> Bool
+symmetric Empty = True
+symmetric (Branch _ left right) = mirror left right
+  where
+    mirror Empty Empty = True
+    mirror (Branch _ l1 r1) (Branch _ l2 r2) = mirror l1 r2 && mirror r1 l2
+    mirror _ _ = False
+
+-- | Problem 57
+-- Binary search trees
+construct :: Ord a => [a] -> Tree a
+construct [] = Empty
+construct (x:xs) = Branch x (construct ys) (construct zs)
+  where (ys,zs) = partition (<x) xs
+
+-- | Problem 58
+-- Generate-and-test paradigm
+symCbalTrees :: Int -> [Tree Char]
+symCbalTrees = filter (symmetric) . cbalTree
+
+-- | Problem 59
+-- Construct height-balanced binary trees
+hbalTree :: a -> Int -> [Tree a]
+hbalTree x 0 = [Empty]
+hbalTree x 1 = [Branch x Empty Empty]
+hbalTree x n = concat
+  [ [ Branch x treesN1 treesN1
+    , Branch x treesN1 treesN2
+    , Branch x treesN2 treesN1
+    ]
+  | treesN1 <- hbalTree x (n-1)
+  , treesN2 <- hbalTree x (n-2)
+  ]
+
+-- | Problem 60
+-- Construct height-balanced binary trees with a given number of nodes
+hbalTreeNodes :: a -> Int -> [Tree a]
+hbalTreeNodes x 0 = [Empty]
+hbalTreeNodes x n = 
+    [ Branch x l r |
+        nl <- [0..n-1],
+        let nr = n-1-nl,
+        abs (nl - nr) <= 1,
+        l <- hbalTreeNodes x nl,
+        r <- hbalTreeNodes x nr
+    ]
+
