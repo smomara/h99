@@ -4,6 +4,7 @@ import Data.List (nub, tails, sortBy, partition)
 import Data.Function (on)
 import qualified Data.Map as M
 import Data.Map (Map)
+import Data.Char (isAlpha)
 
 -- | Problem 1
 -- Find the last element of a list
@@ -365,7 +366,7 @@ buildTree ts = buildTree $ insertInOrder newNode rest
   where
     (t1:t2:rest) = sortBy (compare `on` freq) ts
     newNode = Node t1 (freq t1 + freq t2) t2
-    
+
     insertInOrder :: Ord a => HuffmanTree a -> [HuffmanTree a] -> [HuffmanTree a]
     insertInOrder t [] = [t]
     insertInOrder t (x:xs)
@@ -456,3 +457,197 @@ hbalTreeNodes x n =
         r <- hbalTreeNodes x nr
     ]
 
+-- | Problem 61
+-- Count the leaves of a binary tree
+countLeaves :: Tree a -> Int
+countLeaves (Empty) = 0
+countLeaves (Branch _ Empty Empty) = 1
+countLeaves (Branch _ l r) = countLeaves l + countLeaves r
+
+-- | Problem 61A
+-- Collect the leaves of a binary tree in a list
+leaves :: Tree a -> [a]
+leaves Empty = []
+leaves (Branch x Empty Empty) = [x]
+leaves (Branch _ l r) = leaves l ++ leaves r
+
+-- | Problem 62
+-- Collect the internal nodes of a binary tree in a list
+internals :: Tree a -> [a]
+internals Empty = []
+internals (Branch x l r) = case (l,r) of
+  (Empty, Empty)               -> []
+  (Branch _ _ _, Empty)        -> x : internals l
+  (Empty, Branch _ _ _)        -> x : internals r
+  (Branch _ _ _, Branch _ _ _) -> x : internals l ++ internals r
+
+-- | Problem 62B
+-- Collect the nodes at a given level in a list
+atLevel :: Tree a -> Int -> [a]
+atLevel Empty _ = []
+atLevel (Branch x _ _) 1 = [x]
+atLevel (Branch _ l r) n = atLevel l (n-1) ++ atLevel r (n-1)
+
+-- | Problem 63
+-- Construct a complete binary tree
+completeBinaryTree :: Int -> Tree Char
+completeBinaryTree 0 = Empty
+completeBinaryTree n = Branch 'x' (completeBinaryTree (n-1)) (completeBinaryTree (n-1))
+
+isCompleteBinaryTree :: Tree a -> Bool
+isCompleteBinaryTree Empty = True
+isCompleteBinaryTree (Branch _ left right) = case left of
+    Empty -> isEmpty right
+    Branch _ _ _ -> case right of
+        Empty -> allEmpty left
+        Branch _ _ _ -> isCompleteBinaryTree left && isCompleteBinaryTree right
+  where
+    isEmpty Empty = True
+    isEmpty _     = False
+
+    allEmpty Empty = True
+    allEmpty (Branch _ l r) = isEmpty l && isEmpty r
+
+-- | Problem 64
+-- Layout algorithm for displaying trees
+layout :: Tree a -> Tree (a, (Int, Int))
+layout tree = fst $ place 1 1 tree
+  where
+    place depth pos Empty = (Empty, pos)
+    place depth pos (Branch v left right) =
+        let (leftTree, pos1) = place (depth+1) pos left
+            (rightTree, pos2) = place (depth+1) (pos1+1) right
+            node = (v, (pos1, depth))
+        in (Branch node leftTree rightTree, pos2)
+
+-- | Problem 65
+-- Layout algorithm for displaying trees (part 2)
+layout' :: Tree a -> Tree (a, (Int, Int))
+layout' tree = place tree 1 startX
+  where
+    startX = 2 ^ (height tree - 1)
+    powers = map (2^) [0..]
+
+    height Empty = 0
+    height (Branch _ l r) = 1 + max (height l) (height r)
+
+    place Empty _ _ = Empty
+    place (Branch v left right) depth x =
+        let gap = 2 ^ (height tree - depth - 1)
+            node = (v, (x-1, depth))
+            leftTree = place left (depth+1) (x-gap)
+            rightTree = place right (depth+1) (x+gap)
+        in Branch node leftTree rightTree
+
+-- | Problem 66
+-- Layout algorithm for displaying trees (part 3)
+layout'' :: Tree a -> Tree (a, (Int, Int))
+layout'' t = tree
+  where
+    (leftP, tree, _) = place x1 1 t
+    x1 = maximum leftP + 1
+
+    place x y Empty = ([], Empty, [])
+    place x y (Branch v l r) =
+        let (ll, l', lr) = place (x-s) (y+1) l
+            (rl, r', rr) = place (x+s) (y+1) r
+            s = maximum (0:zipWith (+) lr rl) `div` 2 + 1
+            leftP' = 0 : overlay (map (+s) ll) (map (subtract s) rl)
+            rightP' = 0 : overlay (map (+s) rr) (map (subtract s) lr)
+        in (leftP', Branch (v, (x,y)) l' r', rightP')
+
+    overlay [] ys = ys
+    overlay xs [] = xs
+    overlay (x:xs) (y:ys) = x : overlay xs ys
+
+-- | Problem 67
+-- A string representation of binary trees
+type Parser a = String -> Maybe (a, String)
+
+char :: Char -> Parser Char
+char expected [] = Nothing
+char expected (x:xs)
+  | x == expected = Just (expected, xs)
+  | otherwise = Nothing
+
+satisfy :: (Char -> Bool) -> Parser Char
+satisfy p [] = Nothing
+satisfy p (x:xs)
+  | p x = Just (x, xs)
+  | otherwise = Nothing
+
+value :: Parser Char
+value = satisfy isAlpha
+
+parseSubtrees :: Parser (Tree Char, Tree Char)
+parseSubtrees input = do
+  (_, rest1)         <- char '(' input
+  (leftTree, rest2)  <- parseTree rest1
+  (_, rest3)         <- char ',' rest2
+  (rightTree, rest4) <- parseTree rest3
+  (_, rest5)         <- char ')' rest4
+  return ((leftTree, rightTree), rest5)
+
+parseTree :: Parser (Tree Char)
+parseTree [] = Just (Empty, [])
+parseTree input@(x:xs)
+  | x == ',' || x == ')' = Just (Empty, input)
+  | otherwise = do
+      (v, rest1) <- value input
+      case rest1 of
+        [] -> Just (Branch v Empty Empty, [])
+        (x:xs)
+          | x == ',' || x == ')' -> Just (Branch v Empty Empty, rest1)
+          | otherwise -> do
+              ((left, right), rest2) <- parseSubtrees rest1
+              return (Branch v left right, rest2)
+
+stringToTree :: String -> Maybe (Tree Char)
+stringToTree input = case parseTree input of
+  Just (tree, "") -> Just tree
+  _ -> Nothing
+
+treeToString :: Tree Char -> String
+treeToString Empty = ""
+treeToString (Branch value Empty Empty) = [value]
+treeToString (Branch value left right) =
+    [value] ++ "(" ++ treeToString left ++ "," ++ treeToString right ++ ")"
+
+-- | Problem 68
+-- Preorder and inorder sequence of binary trees
+treeToInorder :: Tree a -> [a]
+treeToInorder Empty = []
+treeToInorder (Branch v l r) = treeToInorder l ++ v : treeToInorder r
+
+treeToPreorder :: Tree a -> [a]
+treeToPreorder Empty = []
+treeToPreorder (Branch v l r) = v : treeToPreorder l ++ treeToPreorder r
+
+preInTree :: Eq a => [a] -> [a] -> Tree a
+preInTree [] [] = Empty
+preInTree (p:ps) io = Branch p leftTree rightTree
+  where
+    (leftIn, _:rightIn) = span (/=p) io
+    (leftPre, rightPre) = splitAt (length leftIn) ps
+    leftTree = preInTree leftPre leftIn
+    rightTree = preInTree rightPre rightIn
+
+-- | Problem 69
+-- Dotstring representation of trees
+tree2ds :: Tree Char -> String
+tree2ds Empty = "."
+tree2ds (Branch v l r) = v : tree2ds l ++ tree2ds r
+
+parseDotString :: Parser (Tree Char)
+parseDotString [] = Nothing
+parseDotString (x:xs)
+    | x == '.' = Just (Empty, xs)
+    | otherwise = do
+        (left, rest1) <- parseDotString xs
+        (right, rest2) <- parseDotString rest1
+        return (Branch x left right, rest2)
+
+ds2tree :: String -> Maybe (Tree Char)
+ds2tree s = case parseDotString s of
+    Just (tree, "") -> Just tree
+    _ -> Nothing
